@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kolmogorov Complexity Visualizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1f2937;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --orange: #db6d28;
+      --red: #f85149;
+      --lit-color: #6b7280;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    header {
+      text-align: center;
+      padding: 3rem 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #58a6ff 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+    header p {
+      color: var(--text-muted);
+      max-width: 60ch;
+      margin: 0 auto;
+      font-size: 0.95rem;
+    }
+    .formula {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.35rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: #a78bfa;
+    }
+
+    /* ── MAIN LAYOUT ─────────────────────────────────────── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── INPUT + METRICS ROW ─────────────────────────────── */
+    .top-row {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 720px) { .top-row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      padding: 0.75rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    .examples-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .ex-btn {
+      padding: 0.3rem 0.75rem;
+      font-size: 0.78rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ex-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+
+    /* ── METRICS CARD ───────────────────────────────────── */
+    .metric { margin-bottom: 0.9rem; }
+    .metric label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .metric .value { font-size: 1.5rem; font-weight: 700; font-family: monospace; }
+    .metric .sub   { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* complexity gauge */
+    .gauge-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+    .gauge-label span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .gauge-label .gauge-pct { font-size: 1rem; font-weight: 700; font-family: monospace; }
+    .gauge-track {
+      height: 10px;
+      border-radius: 10px;
+      background: var(--surface2);
+      overflow: hidden;
+      margin-bottom: 0.3rem;
+    }
+    .gauge-fill {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+    .gauge-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+    .complexity-label {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    /* ── VISUALIZATION SECTION ──────────────────────────── */
+    .viz-card { margin-bottom: 1.5rem; }
+    .char-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      padding: 0.75rem;
+      background: var(--surface2);
+      border-radius: 6px;
+      min-height: 60px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .char-block {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: default;
+      transition: transform 0.1s;
+      position: relative;
+    }
+    .char-block:hover { transform: scale(1.25); z-index: 10; }
+    .char-block.lit { background: #374151; color: #9ca3af; }
+    .char-block.space { background: transparent; border: 1px dashed #374151; color: #4b5563; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+    .legend-dot {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    /* ── TOKEN SECTION ──────────────────────────────────── */
+    .token-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      padding: 0.75rem;
+      background: var(--surface2);
+      border-radius: 6px;
+      min-height: 50px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .token {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      border: 1px solid transparent;
+    }
+    .token.lit {
+      background: #1f2937;
+      border-color: #374151;
+      color: #9ca3af;
+    }
+    .token.ref {
+      border-color: transparent;
+      color: #fff;
+      font-weight: 600;
+    }
+    .token-icon { font-size: 0.65rem; opacity: 0.7; }
+
+    /* ── COMPARISON ─────────────────────────────────────── */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+    .cmp-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      text-align: center;
+    }
+    .cmp-item .cmp-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+    }
+    .cmp-item .cmp-string {
+      font-family: monospace;
+      font-size: 0.7rem;
+      color: var(--accent);
+      background: var(--surface);
+      padding: 2px 6px;
+      border-radius: 4px;
+      word-break: break-all;
+      display: block;
+      margin-bottom: 0.75rem;
+      max-height: 40px;
+      overflow: hidden;
+    }
+    .cmp-bar-track {
+      height: 8px;
+      background: var(--bg);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 0.3rem;
+    }
+    .cmp-bar { height: 100%; border-radius: 8px; transition: width 0.4s; }
+    .cmp-pct { font-size: 0.75rem; font-weight: 700; font-family: monospace; }
+
+    /* ── EXPLANATION ────────────────────────────────────── */
+    .explainer {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .explainer-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+    }
+    .explainer-card .icon { font-size: 1.4rem; margin-bottom: 0.4rem; }
+    .explainer-card h3 { font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .explainer-card p { font-size: 0.78rem; color: var(--text-muted); }
+
+    hr.divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+    .char-count { font-size: 0.75rem; color: var(--text-muted); text-align: right; margin-top: 0.3rem; }
+
+    /* tooltip */
+    .char-block[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-size: 0.65rem;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Kolmogorov Complexity Visualizer</h1>
+  <p>
+    The Kolmogorov complexity <strong>K(s)</strong> of a string is the length of
+    the <em>shortest program</em> that produces it. The more structure a string has,
+    the shorter its description — and the lower its complexity.
+  </p>
+  <div class="formula">K(s) ≈ |shortest description of s|</div>
+</header>
+
+<main>
+
+  <!-- CONCEPT CARDS -->
+  <div class="explainer" style="margin-top:2rem;">
+    <div class="explainer-card">
+      <div class="icon">📦</div>
+      <h3>Compressibility = Low Complexity</h3>
+      <p>Strings with repeated patterns compress well. Their K-complexity is small relative to their length.</p>
+    </div>
+    <div class="explainer-card">
+      <div class="icon">🎲</div>
+      <h3>Randomness = High Complexity</h3>
+      <p>A truly random string cannot be compressed — its shortest description <em>is itself</em>.</p>
+    </div>
+    <div class="explainer-card">
+      <div class="icon">🔍</div>
+      <h3>Approximation via LZ77</h3>
+      <p>True K-complexity is uncomputable. We approximate it using LZ77 compression: fewer tokens → lower complexity.</p>
+    </div>
+    <div class="explainer-card">
+      <div class="icon">📏</div>
+      <h3>Normalized Complexity</h3>
+      <p>We show <strong>K(s)/|s|</strong> — the ratio of compressed tokens to original length. 0% = perfectly regular, 100% = incompressible.</p>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- TOP ROW: INPUT + METRICS -->
+  <div class="top-row">
+    <!-- Input -->
+    <div class="card">
+      <div class="section-title">String Input</div>
+      <textarea id="input" maxlength="600" placeholder="Type or paste a string to analyze…">aababcabcdabcdeabcdefabcdefg</textarea>
+      <div class="char-count"><span id="char-count">0</span> / 600 characters</div>
+      <div class="examples-row">
+        <span style="font-size:0.75rem;color:var(--text-muted);align-self:center;">Examples:</span>
+        <button class="ex-btn" data-ex="aaaaaaaaaaaaaaaaaaaaaaaaaaaa">All A's</button>
+        <button class="ex-btn" data-ex="abababababababababababababab">AB repeat</button>
+        <button class="ex-btn" data-ex="aababcabcdabcdeabcdefabcdefg">Growing</button>
+        <button class="ex-btn" data-ex="01001011001101110100101100110111">Binary staircase</button>
+        <button class="ex-btn" data-ex="0110100110010110100101100110100110010110011010010110100110010110">Thue-Morse</button>
+        <button class="ex-btn" data-ex="3141592653589793238462643383279502884197169399375105820974944592">π digits</button>
+        <button class="ex-btn" data-ex="the quick brown fox jumps over the lazy dog">Pangram</button>
+        <button class="ex-btn" id="rand-btn">Random</button>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="card">
+      <div class="section-title">Complexity Metrics</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem;">
+        <div class="metric">
+          <label>Original length</label>
+          <div class="value" id="m-original">—</div>
+          <div class="sub">characters</div>
+        </div>
+        <div class="metric">
+          <label>K-approx tokens</label>
+          <div class="value" id="m-tokens">—</div>
+          <div class="sub">LZ77 tokens</div>
+        </div>
+        <div class="metric">
+          <label>Literals</label>
+          <div class="value" id="m-literals" style="color:var(--text-muted);">—</div>
+          <div class="sub">new chars</div>
+        </div>
+        <div class="metric">
+          <label>Back-refs</label>
+          <div class="value" id="m-refs" style="color:var(--accent);">—</div>
+          <div class="sub">reused patterns</div>
+        </div>
+      </div>
+
+      <div class="gauge-label">
+        <span>Normalized complexity K(s)/|s|</span>
+        <span class="gauge-pct" id="gauge-pct">—</span>
+      </div>
+      <div class="gauge-track">
+        <div class="gauge-fill" id="gauge-fill" style="width:0%"></div>
+      </div>
+      <div class="gauge-labels">
+        <span>Simple</span>
+        <span>Moderate</span>
+        <span>Random</span>
+      </div>
+      <div id="complexity-label" class="complexity-label"></div>
+    </div>
+  </div>
+
+  <!-- CHAR VISUALIZATION -->
+  <div class="card viz-card">
+    <div class="section-title">String Visualization — colored blocks share patterns</div>
+    <div class="char-grid" id="char-grid"></div>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#374151;"></div>
+        <span>Literal — unique, seen for the first time</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#3b82f6;"></div>
+        <span>Back-reference — copied from an earlier pattern (same color = same source)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOKEN VISUALIZATION -->
+  <div class="card viz-card">
+    <div class="section-title">LZ77 Token Stream — the "shortest description" of the string</div>
+    <div class="token-grid" id="token-grid"></div>
+    <div class="legend" style="margin-top:0.75rem;">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#1f2937;border:1px solid #374151;"></div>
+        <span><strong>lit</strong> "x" — one new literal character</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#1d4ed8;"></div>
+        <span><strong>ref</strong> (offset, len) — copy <em>len</em> chars from <em>offset</em> positions back</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- COMPARISON -->
+  <div class="section-title" style="margin-bottom:1rem;">Complexity Comparison — built-in examples</div>
+  <div class="comparison-grid" id="comparison-grid"></div>
+
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// LZ77 compression (sliding window)
+// ─────────────────────────────────────────────────────────────────
+function lz77(str, windowSize = 255, maxMatch = 16) {
+  const tokens = [];
+  let pos = 0;
+  while (pos < str.length) {
+    const winStart = Math.max(0, pos - windowSize);
+    let bestOffset = 0, bestLen = 0;
+    for (let src = winStart; src < pos; src++) {
+      let len = 0;
+      while (len < maxMatch && pos + len < str.length && str[src + len] === str[pos + len]) {
+        len++;
+      }
+      if (len > bestLen) { bestLen = len; bestOffset = pos - src; }
+    }
+    if (bestLen >= 3) {
+      tokens.push({ type: 'ref', offset: bestOffset, length: bestLen, startPos: pos });
+      pos += bestLen;
+    } else {
+      tokens.push({ type: 'lit', char: str[pos], startPos: pos });
+      pos++;
+    }
+  }
+  return tokens;
+}
+
+// Map each character position to its token (and group id for refs)
+function charModes(str, tokens) {
+  const mode  = new Array(str.length).fill('lit');
+  const group = new Array(str.length).fill(-1);
+  let gid = 0;
+  for (const t of tokens) {
+    if (t.type === 'ref') {
+      for (let i = 0; i < t.length; i++) {
+        mode[t.startPos + i]  = 'ref';
+        group[t.startPos + i] = gid;
+      }
+      gid++;
+    }
+  }
+  return { mode, group };
+}
+
+// Generate a visually distinct HSL color for a group id
+function groupColor(id, alpha = 1) {
+  const hue = (id * 137.508) % 360; // golden angle spread
+  return `hsla(${hue},70%,60%,${alpha})`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Gauge helpers
+// ─────────────────────────────────────────────────────────────────
+function complexityClass(ratio) {
+  if (ratio < 0.30) return { label: 'Very Simple',   bg: '#166534', fg: '#4ade80' };
+  if (ratio < 0.50) return { label: 'Simple',        bg: '#14532d', fg: '#86efac' };
+  if (ratio < 0.65) return { label: 'Moderate',      bg: '#78350f', fg: '#fbbf24' };
+  if (ratio < 0.80) return { label: 'Complex',       bg: '#7c2d12', fg: '#fb923c' };
+  return               { label: 'Near-Random',   bg: '#7f1d1d', fg: '#f87171' };
+}
+
+function gaugeColor(ratio) {
+  if (ratio < 0.30) return '#22c55e';
+  if (ratio < 0.50) return '#84cc16';
+  if (ratio < 0.65) return '#eab308';
+  if (ratio < 0.80) return '#f97316';
+  return '#ef4444';
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Main render
+// ─────────────────────────────────────────────────────────────────
+function render(str) {
+  if (!str.length) {
+    document.getElementById('char-grid').innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem;">Start typing above…</span>';
+    document.getElementById('token-grid').innerHTML = '';
+    ['m-original','m-tokens','m-literals','m-refs','gauge-pct'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    document.getElementById('gauge-fill').style.width = '0%';
+    document.getElementById('complexity-label').textContent = '';
+    return;
+  }
+
+  const tokens = lz77(str);
+  const { mode, group } = charModes(str, tokens);
+
+  const litCount = tokens.filter(t => t.type === 'lit').length;
+  const refCount = tokens.filter(t => t.type === 'ref').length;
+  const ratio    = tokens.length / str.length;
+  const pct      = Math.round(ratio * 100);
+  const cls      = complexityClass(ratio);
+
+  // Metrics
+  document.getElementById('m-original').textContent = str.length;
+  document.getElementById('m-tokens').textContent   = tokens.length;
+  document.getElementById('m-literals').textContent = litCount;
+  document.getElementById('m-refs').textContent     = refCount;
+  document.getElementById('gauge-pct').textContent  = pct + '%';
+
+  const fill = document.getElementById('gauge-fill');
+  fill.style.width      = Math.min(pct, 100) + '%';
+  fill.style.background = gaugeColor(ratio);
+
+  const lbl = document.getElementById('complexity-label');
+  lbl.textContent        = cls.label;
+  lbl.style.background   = cls.bg;
+  lbl.style.color        = cls.fg;
+
+  // Char grid
+  const grid = document.getElementById('char-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch  = str[i];
+    const div = document.createElement('div');
+    div.className = 'char-block';
+
+    if (mode[i] === 'lit') {
+      div.classList.add('lit');
+      div.setAttribute('data-tip', `pos ${i}: literal "${ch}"`);
+    } else {
+      const g = group[i];
+      div.style.background = groupColor(g, 0.85);
+      div.style.color      = '#fff';
+      div.setAttribute('data-tip', `pos ${i}: back-ref group ${g}`);
+    }
+
+    div.textContent = ch === ' ' ? '·' : ch;
+    grid.appendChild(div);
+  }
+
+  // Token grid
+  const tgrid = document.getElementById('token-grid');
+  tgrid.innerHTML = '';
+  let gid = 0;
+  for (const t of tokens) {
+    const span = document.createElement('span');
+    span.className = 'token';
+    if (t.type === 'lit') {
+      span.classList.add('lit');
+      const display = t.char === ' ' ? '·' : t.char === '\n' ? '↵' : t.char;
+      span.innerHTML = `<span class="token-icon">lit</span><strong>${display}</strong>`;
+      span.title     = `Literal: '${t.char}'`;
+    } else {
+      span.classList.add('ref');
+      span.style.background   = groupColor(gid, 0.75);
+      span.style.borderColor  = groupColor(gid, 1);
+      span.innerHTML = `<span class="token-icon">ref</span>(-${t.offset},${t.length})`;
+      span.title     = `Back-ref: copy ${t.length} chars from ${t.offset} positions back`;
+      gid++;
+    }
+    tgrid.appendChild(span);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Comparison examples
+// ─────────────────────────────────────────────────────────────────
+const COMPARE_EXAMPLES = [
+  { label: 'All A\'s',    str: 'a'.repeat(60) },
+  { label: 'AB repeat',   str: 'ab'.repeat(30) },
+  { label: 'ABC repeat',  str: 'abc'.repeat(20) },
+  { label: 'Growing seq', str: 'aababcabcdabcdeabcdefabcdefgabcdefgh' },
+  { label: 'Thue-Morse',  str: '0110100110010110100101100110100110010110011010010110100110010110' },
+  { label: 'π digits',    str: '314159265358979323846264338327950288419716939937510582097494459' },
+  { label: 'Random',      str: randomStr(60) },
+];
+
+function randomStr(n) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let s = '';
+  for (let i = 0; i < n; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function buildComparison() {
+  const container = document.getElementById('comparison-grid');
+  container.innerHTML = '';
+
+  const maxRatio = Math.max(...COMPARE_EXAMPLES.map(e => {
+    const t = lz77(e.str);
+    return t.length / e.str.length;
+  }));
+
+  for (const ex of COMPARE_EXAMPLES) {
+    const tokens = lz77(ex.str);
+    const ratio  = tokens.length / ex.str.length;
+    const pct    = Math.round(ratio * 100);
+    const color  = gaugeColor(ratio);
+
+    const div = document.createElement('div');
+    div.className = 'cmp-item';
+    div.innerHTML = `
+      <div class="cmp-label">${ex.label}</div>
+      <code class="cmp-string">${ex.str.slice(0, 24)}${ex.str.length > 24 ? '…' : ''}</code>
+      <div class="cmp-bar-track">
+        <div class="cmp-bar" style="width:${(ratio / maxRatio * 100).toFixed(1)}%;background:${color};"></div>
+      </div>
+      <div class="cmp-pct" style="color:${color};">${pct}%</div>
+      <div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">${tokens.length} tokens / ${ex.str.length} chars</div>
+    `;
+    div.style.cursor = 'pointer';
+    div.title = 'Click to load this example';
+    div.addEventListener('click', () => {
+      document.getElementById('input').value = ex.str;
+      triggerRender();
+    });
+    container.appendChild(div);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Events
+// ─────────────────────────────────────────────────────────────────
+function triggerRender() {
+  const str = document.getElementById('input').value;
+  document.getElementById('char-count').textContent = str.length;
+  render(str);
+}
+
+document.getElementById('input').addEventListener('input', triggerRender);
+
+document.querySelectorAll('.ex-btn[data-ex]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('input').value = btn.dataset.ex;
+    triggerRender();
+  });
+});
+
+document.getElementById('rand-btn').addEventListener('click', () => {
+  const n = 40 + Math.floor(Math.random() * 40);
+  document.getElementById('input').value = randomStr(n);
+  triggerRender();
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────
+buildComparison();
+triggerRender();
+</script>
+</body>
+</html>
